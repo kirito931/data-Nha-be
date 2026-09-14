@@ -11,7 +11,9 @@ from torchvision.models import convnext_base, ConvNeXt_Base_Weights
 
 def build_convnext_nowcasting(num_classes: int = 5, in_channels: int = 12, head_init_scale: float = 0.001):
     """
-    Tạo mô hình ConvNeXt-B tùy biến theo đúng đặc tả của bài báo
+    Tạo baseline ConvNeXt-B cho bài toán Nowcasting,
+    bám theo kiến trúc được mô tả trong paper và
+    có một số lựa chọn implementation riêng cho input 12 channels.
     """
     print("Đang nạp mô hình ConvNeXt-B pretrained từ ImageNet...")
     weights = ConvNeXt_Base_Weights.DEFAULT

@@ -30,8 +30,8 @@ def evaluate_test_set():
         print("Lỗi: Không tìm thấy file checkpoint hoặc bảng test_set_month_2h.csv!")
         return
 
-    # 1. Nạp Dataset từ danh sách mẫu Test đã lưu
-    test_dataset = RadarNowcastingDataset(test_meta_path, ppi_dir, horizon="2h")
+    # 1. Nạp Dataset từ danh sách mẫu Test đã lưu (checkpoint hiện tại được train với raw pixels)
+    test_dataset = RadarNowcastingDataset(test_meta_path, ppi_dir, horizon="2h", apply_paper_transform=False)
     test_loader = DataLoader(test_dataset, batch_size=12, shuffle=False, num_workers=2)
     print(f"-> Đã nạp {len(test_dataset)} mẫu kiểm tra độc lập (Test Set).")
 
