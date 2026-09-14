@@ -1,7 +1,29 @@
 """
-Huấn luyện và đánh giá mô hình ConvNeXt-B trên toàn bộ 4 mốc dự báo (0h, 1h, 2h, 3h)
-cho bộ dữ liệu tháng 08/2025, tái lập thí nghiệm Table 5 của bài báo gốc.
-Tối ưu hóa: batch_size=12, num_workers=4, FP16 AMP trên GPU RTX 4050 6GB VRAM.
+================================================================================
+BƯỚC 11 TRONG PIPELINE: HUẤN LUYỆN & ĐỐI CHIẾU ĐA MỐC THỜI GIAN (0h, 1h, 2h, 3h)
+================================================================================
+Mục đích:
+- Tái lập toàn diện thực nghiệm trong BẢNG 5 (Table 5) của bài báo gốc:
+  Khảo sát hiệu năng dự báo của mô hình ConvNeXt-B trên cả 4 khoảng thời gian:
+    * 0h (Nowcast tức thời)
+    * 1h (Sau 1 giờ)
+    * 2h (Sau 2 giờ)
+    * 3h (Sau 3 giờ)
+- QUY LUẬT VẬT LÝ VÀ KHÍ TƯỢNG HỌC CẦN QUAN SÁT:
+  Khoảng cách thời gian dự báo càng xa (từ 0h lên 3h) thì sự thay đổi hình thái mây và
+  hướng gió càng lớn, dẫn đến tương quan giữa ảnh radar quá khứ và nhãn tương lai giảm dần.
+  Do đó, Test Accuracy sẽ có xu hướng giảm dần (0h cao nhất, 1h, 2h, 3h giảm tương ứng).
+- TỰ ĐỘNG HÓA HOÀN TOÀN:
+    1. Kiểm tra nếu mốc nào đã có checkpoint .pth lưu sẵn thì bỏ qua bước train để tiết kiệm thời gian.
+    2. Đánh giá độc lập trên tập Test (10% độc lập).
+    3. Trích xuất Loss, Accuracy, Macro F1.
+    4. Xuất Bảng thống kê đối chiếu trực tiếp với số liệu công bố trong bài báo gốc.
+    5. Vẽ biểu đồ cột đôi so sánh trực quan (Our Model vs Paper).
+
+- Xuất kết quả ra:
+    * Bảng thống kê: outputs/checkpoints/horizon_comparison_month.csv
+    * Biểu đồ đối chiếu: outputs/checkpoints/horizon_comparison_month.png
+================================================================================
 """
 from pathlib import Path
 import time
@@ -19,11 +41,14 @@ from radar_dataset import RadarNowcastingDataset, LABEL_MAPPING
 
 
 def train_and_eval_horizon(horizon: str, epochs: int = 15, device=None):
+    """
+    Huấn luyện (nếu chưa có checkpoint) và đánh giá độc lập cho 1 mốc thời gian cụ thể.
+    """
     print("\n" + "=" * 70)
-    print(f"       XỬ LÝ MỐC THỜI GIAN DỰ BÁO: {horizon.upper()}")
+    print(f"       TIẾN HÀNH XỬ LÝ MỐC THỜI GIAN DỰ BÁO: +{horizon.upper()}")
     print("=" * 70)
 
-    # Cấu hình tối ưu phần cứng (RTX 4050 + Ryzen 5)
+    # Cấu hình siêu tham số tối ưu hóa phần cứng
     batch_size = 12
     accum_steps = 3
     base_lr = 5e-5
@@ -37,8 +62,8 @@ def train_and_eval_horizon(horizon: str, epochs: int = 15, device=None):
     ckpt_path = checkpoint_dir / f"best_convnext_month_{horizon}.pth"
     test_csv_path = checkpoint_dir / f"test_set_month_{horizon}.csv"
 
-    # 1. Nạp Dataset và chia tỉ lệ chuẩn 80% : 10% : 10%
-    full_dataset = RadarNowcastingDataset(metadata_path, ppi_dir, horizon=horizon)
+    # 1. Nạp Dataset và chia tỉ lệ chuẩn 80% Train : 10% Val : 10% Test
+    full_dataset = RadarNowcastingDataset(metadata_path, ppi_dir, horizon=horizon, apply_paper_transform=False)
     total_samples = len(full_dataset)
     train_size = int(0.80 * total_samples)
     val_size = int(0.10 * total_samples)
@@ -49,7 +74,7 @@ def train_and_eval_horizon(horizon: str, epochs: int = 15, device=None):
         full_dataset, [train_size, val_size, test_size], generator=generator
     )
 
-    # Lưu danh sách mẫu tập Test
+    # Lưu danh sách mẫu tập Test nếu chưa có
     if not test_csv_path.exists():
         df_meta = full_dataset.data.iloc[test_set.indices].copy()
         df_meta.to_csv(test_csv_path, index=False)
@@ -67,15 +92,15 @@ def train_and_eval_horizon(horizon: str, epochs: int = 15, device=None):
         num_workers=2, pin_memory=True
     )
 
-    print(f"Tổng mẫu hợp lệ [{horizon}]: {total_samples} | Train: {train_size} | Val: {val_size} | Test: {test_size}")
+    print(f"Tổng số mẫu mốc [{horizon}]: {total_samples} | Train: {train_size} | Val: {val_size} | Test: {test_size}")
 
     criterion = nn.CrossEntropyLoss(label_smoothing=0.1)
 
-    # 2. Huấn luyện (hoặc bỏ qua nếu đã có checkpoint)
+    # 2. Huấn luyện (Nếu đã có file checkpoint lưu sẵn thì bỏ qua để tiết kiệm thời gian)
     if ckpt_path.exists():
         print(f"-> Đã tìm thấy checkpoint có sẵn: {ckpt_path.name}. Bỏ qua bước train!")
     else:
-        print(f"-> Bắt đầu huấn luyện mới {epochs} epochs...")
+        print(f"-> Bắt đầu huấn luyện mới {epochs} epochs trên GPU...")
         model = build_convnext_nowcasting(num_classes=5, in_channels=12, head_init_scale=0.001)
         model = model.to(device)
 
@@ -189,10 +214,10 @@ def train_and_eval_horizon(horizon: str, epochs: int = 15, device=None):
 
 def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print("=" * 70)
-    print(f"CHƯƠNG TRÌNH SO SÁNH ĐA MỐC THỜI GIAN TOÀN THÁNG (0h, 1h, 2h, 3h)")
-    print(f"Phần cứng: {torch.cuda.get_device_name(0)} (RTX 4050 6GB)")
-    print("=" * 70)
+    print("=" * 75)
+    print("CHƯƠNG TRÌNH SO SÁNH ĐA MỐC THỜI GIAN TOÀN THÁNG (0h, 1h, 2h, 3h)")
+    print(f"Phần cứng thực nghiệm: {torch.cuda.get_device_name(0)} (RTX 4050 6GB)")
+    print("=" * 75)
 
     horizons = ["0h", "1h", "2h", "3h"]
     results = []
@@ -202,10 +227,10 @@ def main():
         res = train_and_eval_horizon(horizon=h, epochs=15, device=device)
         results.append(res)
 
-    # 1. Hiển thị bảng tổng hợp so sánh trực tiếp
+    # 1. Hiển thị bảng tổng hợp so sánh trực tiếp với bài báo
     df_res = pd.DataFrame(results)
 
-    # Số liệu công bố của bài báo (ConvNeXt-B, Table 5) để đối chiếu trực tiếp
+    # Số liệu công bố của bài báo gốc (ConvNeXt-B, Table 5) để đối chiếu
     paper_benchmarks = {
         "0h": {"paper_loss": 0.2830, "paper_acc": 91.10},
         "1h": {"paper_loss": 0.4653, "paper_acc": 85.04},
@@ -216,7 +241,7 @@ def main():
     df_res["paper_acc"] = df_res["horizon"].map(lambda x: paper_benchmarks[x]["paper_acc"])
 
     print("\n" + "=" * 80)
-    print("      BẢNG ĐỐI CHIẾU KẾT QUẢ ĐA MỐC DỰ BÁO VỚI BÀI BÁO GỐC")
+    print("      BẢNG ĐỐI CHIẾU KẾT QUẢ ĐA MỐC DỰ BÁO VỚI BÀI BÁO GỐC (TABLE 5)")
     print("=" * 80)
     cols_display = ["horizon", "total_samples", "test_loss", "test_acc", "macro_f1", "paper_loss", "paper_acc"]
     print(df_res[cols_display].to_string(index=False))
@@ -235,8 +260,8 @@ def main():
     our_accs = df_res["test_acc"].tolist()
     paper_accs = df_res["paper_acc"].tolist()
 
-    bars1 = ax.bar(x - width/2, our_accs, width, label='Mô hình nhóm (Tháng 08/2025)', color='#1f77b4', alpha=0.85)
-    bars2 = ax.bar(x + width/2, paper_accs, width, label='Bài báo gốc NRD-1 (3 năm)', color='#ff7f0e', alpha=0.85)
+    bars1 = ax.bar(x - width/2, our_accs, width, label='Mô hình nhóm (Tháng 08/2025 - 15 epochs)', color='#1f77b4', alpha=0.85)
+    bars2 = ax.bar(x + width/2, paper_accs, width, label='Bài báo gốc NRD-1 (3 năm - 150 epochs)', color='#ff7f0e', alpha=0.85)
 
     ax.set_xlabel('Mốc thời gian dự báo (Forecast Horizon)', fontsize=11, fontweight='bold')
     ax.set_ylabel('Độ chính xác Test Accuracy (%)', fontsize=11, fontweight='bold')

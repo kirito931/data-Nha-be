@@ -1,11 +1,31 @@
-.venv
-2025 Pro-Raw T08
+# Môi trường ảo Python
+.venv/
+env/
+venv/
+
+# Biến môi trường
+.env
+
+# Dữ liệu thô và tài liệu nội bộ (Bảo vệ bản quyền dữ liệu)
+2025 Pro-Raw T08/
+*.RAW*
+*.nc
+*.sigmet
 ssrn-5139080.pdf
+119-1-1240-1-10-20160718.pdf
 danh-sach-chu-de-do an-KHDL20260808.docx
 pipeline.txt
-119-1-1240-1-10-20160718.pdf
-*.pth
+main.pdf
+
+# Thư mục đầu ra, ảnh PPI trích xuất và trọng số mô hình
 outputs/
+*.pth
+*.pt
+*.onnx
+
+# Cache Python và hệ thống
 __pycache__/
 *.pyc
-*.pyo
+*.pyo
+.DS_Store
+Thumbs.db
