@@ -60,10 +60,10 @@ Dưới đây là thứ tự mở và chạy các file code trong dự án. **Tu
  ┌─────────────────────────────────┴─────────────────────────────────┐
  │                                                                   │
  ▼                                                                   ▼
-[Bước 7] radar_dataset.py                   [Bước 8] model.py
+[Bước 7] radar_dataset.py                   [Bước 8] model.py / model_in22k.py
 (PyTorch Dataset + Data Transformation:     (Tùy biến mạng ConvNeXt-B:
- RandAugment, MedianBlur, AutoContrast,      Stem 12 channels, Head 5 classes
- Normalization theo NRD-1)                   scale trọng số 0.001)
+ RandAugment, MedianBlur, AutoContrast,      - model.py: Pretrained 1K (torchvision)
+ Normalization theo NRD-1)                   - model_in22k.py: Pretrained 22k (timm))
  │                                           │
  └─────────────────┬─────────────────────────┘
                    │
@@ -93,7 +93,7 @@ Dưới đây là thứ tự mở và chạy các file code trong dự án. **Tu
 | **05** | [`build_target_mapping_month.py`](file:///d:/Documents/Đồ án/src/build_target_mapping_month.py) | Tìm nhãn thời tiết tương lai tại các mốc 0h, 1h, 2h, 3h | `temporal_groups_2025-08.csv` & `radar_index_2025-08.csv` | `outputs/metadata/target_mapping_2025-08.csv` |
 | **06** | [`build_dataset_metadata_month.py`](file:///d:/Documents/Đồ án/src/build_dataset_metadata_month.py) | Ghép 4 file đầu vào và nhãn 4 mốc tương lai thành bảng tổng | Cả 3 file CSV metadata ở trên | `outputs/metadata/dataset_2025-08.csv` |
 | **07** | [`radar_dataset.py`](file:///d:/Documents/Đồ án/src/radar_dataset.py) | Lớp Dataset nạp 4 ảnh (12 kênh) + Data Transformation | `dataset_2025-08.csv` và ảnh PPI | PyTorch DataLoader sinh tensor `(B, 12, 224, 224)` |
-| **08** | [`model.py`](file:///d:/Documents/Đồ án/src/model.py) | Định nghĩa mạng ConvNeXt-B nhận 12 kênh và xuất 5 classes | Trọng số Pretrained ImageNet | Mô hình PyTorch `nn.Module` sẵn sàng train |
+| **08** | [`model.py`](file:///d:/Documents/Đồ án/src/model.py) <br> *(và [`model_in22k.py`](file:///d:/Documents/Đồ án/src/model_in22k.py))* | Định nghĩa mạng ConvNeXt-B nhận 12 kênh và xuất 5 classes | Trọng số Pretrained ImageNet-1K (`torchvision`) hoặc ImageNet-22k (`timm`) | Mô hình PyTorch `nn.Module` sẵn sàng train |
 | **09** | [`train_month.py`](file:///d:/Documents/Đồ án/src/train_month.py) | Vòng lặp huấn luyện tối ưu hóa GPU RTX 4050 (AMP FP16) | Dataset + Mô hình ConvNeXt-B | `best_convnext_month_2h.pth`, file log CSV, biểu đồ Loss |
 | **10** | [`evaluate_month.py`](file:///d:/Documents/Đồ án/src/evaluate_month.py) | Đánh giá tập Test độc lập, xuất Classification Report | Checkpoint `.pth` + Test Set CSV | Báo cáo Precision, Recall, F1 + Ma trận nhầm lẫn |
 | **11** | [`compare_horizons_month.py`](file:///d:/Documents/Đồ án/src/compare_horizons_month.py) | Tái lập thí nghiệm Table 5 của bài báo cho cả 4 mốc | Toàn bộ pipeline trên 4 mốc | `horizon_comparison_month.csv` & `horizon_comparison_month.png` |
@@ -165,11 +165,14 @@ Dưới đây là thứ tự mở và chạy các file code trong dự án. **Tu
      - Blue: $\mu = 0.9632, \sigma = 0.1163$
 - Ghép 4 ảnh theo chiều kênh $\to$ thu được Tensor đầu vào $X$ kích thước **$(12, 224, 224)$**.
 
-### Bước 8: `model.py` (Kiến trúc ConvNeXt-B)
+### Bước 8: `model.py` & `model_in22k.py` (Kiến trúc ConvNeXt-B)
 - ConvNeXt-B là kiến trúc mạng tích chập hiện đại bậc nhất, kết hợp ưu điểm tính toán nhanh của CNN và cơ chế tiếp nhận không gian rộng của Vision Transformer (ViT).
-- **Điểm tùy biến đặc thù cho bài toán Nowcasting**:
+- **2 Phiên bản kiến trúc trong mã nguồn**:
+  - **Phương án 1 (`src/model.py` - Baseline hiện tại)**: Sử dụng trọng số Pretrained ImageNet-1K (`IMAGENET1K_V1`, 1.000 classes) tích hợp sẵn trong thư viện `torchvision`. Dùng cho toàn bộ các thực nghiệm và checkpoint đã báo cáo.
+  - **Phương án 2 (`src/model_in22k.py` - Chuẩn 100% bài báo gốc)**: Sử dụng trọng số Pretrained ImageNet-22k (`convnext_base.fb_in22k`, 21.841 classes của Meta AI) thông qua thư viện `timm`, tích hợp `drop_path_rate = 0.2` (Stochastic depth) theo Table 2 của bài báo. Mô hình 22k học từ số lượng ảnh gấp 11 lần giúp năng lực trích xuất xoáy mây và đặc trưng khí quyển vượt trội hơn.
+- **2 Điểm tùy biến cốt lõi cho bài toán Nowcasting**:
   - Bình thường ConvNeXt nhận ảnh RGB 3 kênh. Nhưng ta đưa vào 4 ảnh liên tiếp (12 kênh) $\to$ Lớp Conv2d đầu tiên (Stem) được mở rộng từ `in_channels=3` lên `in_channels=12`. Trọng số được sao chép từ ImageNet chia cho 4 để giữ nguyên cường độ truyền tín hiệu.
-  - Lớp phân loại cuối (Classifier Head) được đổi thành 5 lớp thời tiết và nhân với tỉ lệ `0.001` để bảo đảm huấn luyện ổn định, tránh bùng nổ gradient ở các epoch đầu.
+  - Lớp phân loại cuối (Classifier Head) được đổi thành 5 lớp thời tiết và nhân với tỉ lệ `head_init_scale = 0.001` (theo mục 4.2 của bài báo) để bảo đảm huấn luyện ổn định, tránh bùng nổ gradient ở các epoch đầu.
 
 ### Bước 9, 10, 11: Huấn luyện, Đánh giá và Đối chiếu (`train`, `evaluate`, `compare`)
 - **Tối ưu phần cứng**: Sử dụng kỹ thuật tính toán hỗn hợp nửa độ chính xác (`torch.amp.autocast('cuda')` và `GradScaler`) giúp tiết kiệm VRAM và tăng tốc độ xử lý gấp đôi trên GPU RTX 4050.

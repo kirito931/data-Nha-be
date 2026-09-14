@@ -36,9 +36,17 @@ Mục đích:
          làm phá vỡ các đặc trưng thị giác quý giá đã được học sẵn trong phần thân Backbone.
 ================================================================================
 """
+import sys
 import torch
 import torch.nn as nn
 from torchvision.models import convnext_base, ConvNeXt_Base_Weights
+
+# Thiết lập mã hóa UTF-8 cho terminal Windows tránh lỗi UnicodeEncodeError cp1252
+if sys.stdout.encoding != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
 
 
 def build_convnext_nowcasting(num_classes: int = 5, in_channels: int = 12, head_init_scale: float = 0.001):

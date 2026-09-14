@@ -155,7 +155,8 @@ Nhóm tiến hành thực nghiệm đối chứng tại mốc +2h (15 epochs tr�
 │   ├── build_target_mapping_month.py# [Bước 05] Ánh xạ mốc thời gian tương lai (0h, 1h, 2h, 3h)
 │   ├── build_dataset_metadata_month.py # [Bước 06] Ghép metadata tạo Dataset tổng hoàn chỉnh
 │   ├── radar_dataset.py             # [Bước 07] PyTorch Dataset tích hợp đầy đủ Data Transformation
-│   ├── model.py                     # [Bước 08] Định nghĩa kiến trúc mạng ConvNeXt-B 12 kênh
+│   ├── model.py                     # [Bước 08 - Phương án 1] Mạng ConvNeXt-B 12 kênh (Pretrained ImageNet-1K)
+│   ├── model_in22k.py               # [Bước 08 - Phương án 2] Mạng ConvNeXt-B Pretrained ImageNet-22k theo chuẩn Paper (timm)
 │   ├── train_month.py               # [Bước 09] Huấn luyện mô hình mốc 2h tối ưu GPU RTX 4050
 │   ├── evaluate_month.py            # [Bước 10] Đánh giá chi tiết tập Test, xuất Confusion Matrix
 │   └── compare_horizons_month.py    # [Bước 11] Huấn luyện và đánh giá đối chiếu cả 4 mốc
