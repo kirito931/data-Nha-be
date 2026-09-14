@@ -3,8 +3,13 @@
 BƯỚC 8 TRONG PIPELINE: KIẾN TRÚC MÔ HÌNH HỌC SÂU CONVNEXT-B NOWCASTING
 ================================================================================
 Mục đích:
-- Định nghĩa và khởi tạo mô hình ConvNeXt-B (Pretrained từ ImageNet-22k) được tùy biến
+- Định nghĩa và khởi tạo mô hình ConvNeXt-B (Pretrained từ ImageNet-1K qua torchvision) được tùy biến
   chuyên biệt cho bài toán Dự báo mưa cực ngắn (Nowcasting).
+- LƯU Ý KHOA HỌC QUAN TRỌNG:
+  * Trong giai đoạn 1 này, mô hình sử dụng trọng số Pretrained ImageNet-1K (1.000 classes) tích hợp sẵn trong torchvision
+    để kiểm chứng tính khả thi của toàn bộ pipeline và tối ưu tài nguyên tính toán.
+  * Bài báo gốc sử dụng trọng số ImageNet-22k (21.841 classes của Meta AI). Phiên bản nâng cấp ImageNet-22k
+    sử dụng thư viện `timm` được tách riêng tại file: `src/model_in22k.py`.
 - TẠI SAO BÀI BÁO LỰA CHỌN CONVNEXT?
   ConvNeXt (Facebook Research / CVPR 2022) là kiến trúc mạng tích chập hiện đại được thiết kế
   lại dựa trên các ưu điểm của Vision Transformer (ViT) và Swin Transformer:
@@ -25,11 +30,10 @@ Mục đích:
          phóng đại lên gấp 4 lần, giúp mô hình hội tụ ổn định ngay từ epoch đầu tiên.
 
     2. TÙY BIẾN LỚP ĐẦU RA (CLASSIFIER HEAD):
-       - Thay lớp Linear 21.841 lớp của ImageNet-22k thành `nn.Linear(1024, 5)` (5 lớp thời tiết).
+       - Thay lớp Linear 1.000 lớp của ImageNet-1K thành `nn.Linear(1024, 5)` (5 lớp thời tiết).
        - Khởi tạo lại trọng số và nhân với hệ số `head_init_scale = 0.001` (theo mục 4.2 của bài báo).
          *Lý do:* Ngăn ngừa các giá trị ngẫu nhiên ban đầu của lớp Head tạo ra gradient quá lớn
-         làm phá vỡ (catastrophic forgetting) các đặc trưng thị giác cực kỳ quý giá đã được
-         học sẵn trong phần thân Backbone.
+         làm phá vỡ các đặc trưng thị giác quý giá đã được học sẵn trong phần thân Backbone.
 ================================================================================
 """
 import torch
@@ -50,9 +54,9 @@ def build_convnext_nowcasting(num_classes: int = 5, in_channels: int = 12, head_
         torch.nn.Module: Mô hình PyTorch hoàn chỉnh sẵn sàng huấn luyện hoặc suy luận.
     """
     print("=" * 70)
-    print("KHỞI TẠO MÔ HÌNH CONVNEXT-B NOWCASTING")
+    print("KHỞI TẠO MÔ HÌNH CONVNEXT-B NOWCASTING (IMAGENET-1K)")
     print("=" * 70)
-    print("-> Đang tải trọng số Pretrained ImageNet-22k từ torchvision...")
+    print("-> Đang tải trọng số Pretrained ImageNet-1K từ torchvision (ConvNeXt_Base_Weights.IMAGENET1K_V1)...")
     weights = ConvNeXt_Base_Weights.DEFAULT
     model = convnext_base(weights=weights)
 

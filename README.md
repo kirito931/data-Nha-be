@@ -53,7 +53,7 @@ Dự án này hiện thực hóa toàn bộ pipeline học sâu từ dữ liệu
   - Very Heavy (>=55)   Ghép kênh thành Tensor (12, 224, 224)
          │                   │
          ▼                   ▼
-  Mốc tương lai        ConvNeXt-B (Pretrained ImageNet-22k)
+  Mốc tương lai        ConvNeXt-B (Pretrained ImageNet-1K / ImageNet-22k)
   (+0h, +1h, +2h, +3h)       │
          │                   ▼
          └─────────────► CrossEntropy Loss (Label Smoothing 0.1)
@@ -76,7 +76,9 @@ x_label = np.sum(normalized_weights * valid_vals) / np.sum(normalized_weights)
 
 ### 3.2. Cấu hình mạng ConvNeXt-B
 - **Stem Convolution**: Thay đổi lớp `nn.Conv2d(3, 128, kernel_size=4, stride=4)` thành `(12, 128, 4, 4)`. Trọng số được khởi tạo bằng cách lặp lại trọng số 3 kênh gốc của ImageNet và chia đều cho 4: $W_{new} = \text{repeat}(W_{orig}, 4) / 4$.
-- **Classifier Head**: Thay lớp Linear 21.841 classes bằng `nn.Linear(1024, 5)` với hệ số khởi tạo `head_init_scale = 0.001` để bảo đảm độ ổn định khi hội tụ.
+- **Classifier Head**: Thay lớp Linear phân loại của ImageNet thành `nn.Linear(1024, 5)` với hệ số khởi tạo `head_init_scale = 0.001` để bảo đảm độ ổn định khi hội tụ.
+  - *Mô hình chính (`model.py`)*: Sử dụng trọng số ImageNet-1K (`IMAGENET1K_V1` tích hợp sẵn trong torchvision) để kiểm chứng pipeline ổn định.
+  - *Mô hình mở rộng (`model_in22k.py`)*: Hỗ trợ nạp đúng trọng số ImageNet-22k (21.841 classes) phát hành bởi Meta AI qua thư viện `timm` theo nguyên bản bài báo.
 - **Optimizer & Scheduler**:
   - `AdamW`: Base Learning Rate = $5 \times 10^{-5}$, Weight Decay = $0.01$.
   - `CosineAnnealingLR`: $T_{max} = 5$.
