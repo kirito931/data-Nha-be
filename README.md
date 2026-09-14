@@ -97,7 +97,19 @@ Thực nghiệm được thực hiện độc lập trên toàn bộ dữ liệu
 | **+2h** | 222 | **0.9612** | **73.42%** | **73.12%** | 0.4984 | **84.92%** |
 | **+3h** | 222 | **0.9753** | **76.23%** | **60.61%** | 0.4961 | **84.66%** |
 
-### 4.2. Trực quan hóa kết quả
+### 4.2. Khảo sát ảnh hưởng của Data Transformation (Ablation Study mốc +2h)
+
+Nhóm tiến hành thực nghiệm đối chứng tại mốc +2h (15 epochs trên RTX 4050) để đánh giá tác động của chuỗi biến đổi dữ liệu theo bài báo:
+
+| Cấu hình mô hình (+2h) | Data Transformation | Val Acc tốt nhất | Test Accuracy | Test Macro F1 | Checkpoint lưu trữ |
+| :--- | :--- | :---: | :---: | :---: | :--- |
+| **Phiên bản 1 (Baseline)** | Không (Raw pixels $[0, 1]$) | **79.73%** | **73.42%** | **73.12%** | `best_convnext_month_2h.pth` |
+| **Phiên bản 2 (Chuẩn Paper)** | Có (RandAug + Blur + Norm) | 74.32% | 68.02% | 67.90% | `best_convnext_month_2h_transformed.pth` |
+| **Bài báo gốc (NRD-1)** | Có (RandAug + Blur + Norm) | -- | **84.92%** | -- | *Dữ liệu 3 năm, 150 epochs* |
+
+> **Phân tích:** Khi bật RandAugment, không gian bài toán học trở nên biến động và phức tạp hơn rất nhiều. Với mạng dung lượng lớn như ConvNeXt-B, kỹ thuật tăng cường dữ liệu đòi hỏi số epoch huấn luyện dài (trong bài báo là **150 epochs**) để mô hình hấp thu đầy đủ tính đa dạng và phát huy khả năng tổng quát hóa. Ở ngưỡng ngắn 15 epochs, mô hình Baseline hội tụ nhanh hơn, trong khi mô hình có RandAugment vẫn đang trong giai đoạn thích nghi.
+
+### 4.3. Trực quan hóa kết quả
 
 | Đối chiếu độ chính xác 4 mốc (So với Bài báo gốc) | Ma trận nhầm lẫn Test Set (Mốc 2h) |
 | :---: | :---: |
@@ -107,9 +119,10 @@ Thực nghiệm được thực hiện độc lập trên toàn bộ dữ liệu
 | :---: |
 | ![Learning Curves](assets/learning_curves.png) |
 
-### 4.3. Nhận xét khoa học
+### 4.4. Nhận xét khoa học
 1. **Xu hướng phân rã dự báo (Forecast Degradation)**: Độ chính xác đạt cao nhất ở mốc tức thời 0h (83.93%) và giảm dần khi khoảng cách dự báo tương lai tăng lên 1h, 2h, 3h (73–76%), phản ánh chính xác quy luật động lực học của hoàn lưu khí quyển.
-2. **Khoảng cách so với bài báo gốc**: Kết quả của mô hình nhóm thấp hơn bài báo từ 7–11% là hoàn toàn dễ hiểu và hợp lý, do:
+2. **Hiện tượng mất cân bằng lớp ở mốc +3h**: Tại mốc +3h, Accuracy đạt 76.23% nhưng Macro F1 giảm xuống 60.61% do mô hình thiên vị dự đoán vào các lớp đa số (Clear, Light rain). Macro F1 phản ánh khách quan hơn năng lực bắt trúng các cơn mưa nguy hiểm.
+3. **Khoảng cách so với bài báo gốc**: Kết quả của mô hình nhóm thấp hơn bài báo từ 7–11% là hoàn toàn dễ hiểu và hợp lý, do:
    - Bài báo sử dụng tập dữ liệu **3 năm** (hơn 200.000 mẫu) và huấn luyện **150 epochs** trên trạm máy chủ GPU RTX A6000 (48GB VRAM).
    - Mô hình thực nghiệm tại đồ án này được huấn luyện thử nghiệm trên **1 tháng dữ liệu** (tháng 08/2025 với 2.220 nhóm) và chạy **15 epochs** trên phần cứng laptop cá nhân (NVIDIA RTX 4050 6GB VRAM).
 
@@ -120,28 +133,34 @@ Thực nghiệm được thực hiện độc lập trên toàn bộ dữ liệu
 ```
 Đồ án/
 ├── assets/                          # Biểu đồ và hình ảnh minh họa cho README
-│   ├── confusion_matrix.png
-│   ├── horizon_comparison.png
-│   └── learning_curves.png
-├── outputs/                         # Kết quả trung gian và checkpoint (gitignored)
-│   ├── checkpoints/                 # Trọng số mô hình (.pth) và lịch sử huấn luyện
+│   ├── confusion_matrix.png         # Ma trận nhầm lẫn 5 lớp thời tiết mốc 2h
+│   ├── horizon_comparison.png       # Biểu đồ cột đối chiếu 4 mốc dự báo với bài báo
+│   └── learning_curves.png          # Đường cong hàm mất mát (Loss) và độ chính xác
+│
+├── outputs/                         # Kết quả trung gian và checkpoint (đã gitignore)
+│   ├── checkpoints/                 # Trọng số mô hình (.pth) và file log
 │   ├── metadata/                    # Bảng chỉ mục CSV (nhãn, chuỗi thời gian, dataset)
 │   └── ppi/all_scans/               # Ảnh radar PPI 224x224 đã trích xuất
-├── src/                             # Mã nguồn chính
-│   ├── build_dataset_metadata_month.py   # Ghép nối metadata đầu vào và nhãn tương lai
-│   ├── build_target_mapping_month.py     # Ánh xạ mốc thời gian tương lai (+0h, +1h, +2h, +3h)
-│   ├── build_temporal_groups_month.py    # Gom chuỗi quét thời gian (t0, t3, t10, t13)
-│   ├── compare_horizons_month.py         # Huấn luyện và đánh giá đối chiếu cả 4 mốc
-│   ├── evaluate_month.py                 # Đánh giá chi tiết tập Test, xuất Confusion Matrix
-│   ├── export_month_ppi.py               # Chuyển đổi file RAW sang ảnh PPI 224x224 bằng Py-ART
-│   ├── generate_labels_month.py          # Tính X_label và gán 5 lớp thời tiết cho toàn tháng
-│   ├── index_month.py                    # Quét toàn bộ 31 ngày, ghi nhận thời gian và chế độ quét
-│   ├── model.py                          # Định nghĩa kiến trúc mạng ConvNeXt-B 12 kênh
-│   ├── radar_dataset.py                  # PyTorch Dataset tích hợp đầy đủ Data Transformation
-│   └── train_month.py                    # Huấn luyện tối ưu VRAM/AMP trên GPU RTX 4050
-├── .env                             # Cấu hình biến môi trường UTF-8
-├── .gitignore                       # Bỏ qua dữ liệu RAW lớn và checkpoints
+│
+├── src/                             # Mã nguồn chính thức (11 bước cốt lõi)
+│   ├── experiments/                 # 📁 Thư mục con lưu trữ 18 script nháp & khảo sát ngày 01
+│   │   ├── README.md                # Giải thích mục đích các script nháp
+│   │   └── ... (các script ngày 01 và kiểm tra phụ)
+│   ├── index_month.py               # [Bước 01] Quét 31 ngày, lập chỉ mục thời gian và mode
+│   ├── build_temporal_groups_month.py# [Bước 02] Gom chuỗi quét thời gian 4 ảnh (3-7-3 phút)
+│   ├── generate_labels_month.py     # [Bước 03] Tính X_label có trọng số và phân 5 lớp
+│   ├── export_month_ppi.py          # [Bước 04] Chuyển đổi file RAW sang ảnh PPI 224x224
+│   ├── build_target_mapping_month.py# [Bước 05] Ánh xạ mốc thời gian tương lai (0h, 1h, 2h, 3h)
+│   ├── build_dataset_metadata_month.py # [Bước 06] Ghép metadata tạo Dataset tổng hoàn chỉnh
+│   ├── radar_dataset.py             # [Bước 07] PyTorch Dataset tích hợp đầy đủ Data Transformation
+│   ├── model.py                     # [Bước 08] Định nghĩa kiến trúc mạng ConvNeXt-B 12 kênh
+│   ├── train_month.py               # [Bước 09] Huấn luyện mô hình mốc 2h tối ưu GPU RTX 4050
+│   ├── evaluate_month.py            # [Bước 10] Đánh giá chi tiết tập Test, xuất Confusion Matrix
+│   └── compare_horizons_month.py    # [Bước 11] Huấn luyện và đánh giá đối chiếu cả 4 mốc
+│
+├── HUONG_DAN_PIPELINE.md            # 🧭 Cẩm nang toàn diện: Thứ tự mở và xử lý file từ 1 -> 11
 ├── requirements.txt                 # Danh mục thư viện phụ thuộc
+├── .gitignore                       # Loại bỏ dữ liệu RAW lớn, checkpoints và outputs
 └── README.md                        # Tài liệu hướng dẫn đồ án
 ```
 
