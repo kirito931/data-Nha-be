@@ -79,7 +79,7 @@ def train_month_in22k(epochs: int = 15, pretrained: bool = True):
         seed=42
     )
 
-    num_workers = 4 if sys.platform != "win32" else 0  # Trên Windows tránh deadlock nếu dùng RAM cache lớn
+    num_workers = 4  # Sử dụng 4 luồng CPU nạp ảnh song song để tăng tốc gấp 3-4 lần
     train_loader = DataLoader(
         train_ds,
         batch_size=batch_size,
