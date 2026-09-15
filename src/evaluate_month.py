@@ -29,9 +29,15 @@ from sklearn.metrics import classification_report, confusion_matrix
 
 from radar_dataset import RadarNowcastingDataset, LABEL_MAPPING
 from model import build_convnext_nowcasting
+from model_in22k import build_convnext_in22k_nowcasting
 
 
-def evaluate_test_set(checkpoint_name: str = "best_convnext_month_2h.pth", apply_paper_transform: bool = False):
+def evaluate_test_set(
+    checkpoint_name: str = "best_convnext_month_2h.pth",
+    apply_paper_transform: bool = False,
+    is_in22k: bool = False,
+    output_cm_name: str = "confusion_matrix_month_2h.png"
+):
     """
     Hàm thực thi đánh giá mô hình trên tập Test và vẽ ma trận nhầm lẫn.
     
@@ -39,6 +45,8 @@ def evaluate_test_set(checkpoint_name: str = "best_convnext_month_2h.pth", apply
         checkpoint_name: Tên file trọng số mô hình cần đánh giá.
         apply_paper_transform: True nếu mô hình được train với Data Transformation mới,
                                False nếu mô hình được train với raw pixels cũ.
+        is_in22k: True nếu mô hình là ConvNeXt-B ImageNet-22k (timm).
+        output_cm_name: Tên file ảnh lưu Ma trận nhầm lẫn.
     """
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("=" * 70)
@@ -72,7 +80,13 @@ def evaluate_test_set(checkpoint_name: str = "best_convnext_month_2h.pth", apply
     # ------------------------------------------------------------
     # 2. KHỞI TẠO MÔ HÌNH VÀ NẠP TRỌNG SỐ TỐI ƯU
     # ------------------------------------------------------------
-    model = build_convnext_nowcasting(num_classes=5, in_channels=12)
+    if is_in22k:
+        model = build_convnext_in22k_nowcasting(
+            num_classes=5, in_channels=12, drop_path_rate=0.2, pretrained=False
+        )
+    else:
+        model = build_convnext_nowcasting(num_classes=5, in_channels=12)
+
     model.load_state_dict(torch.load(checkpoint_path, map_location=device, weights_only=True))
     model = model.to(device)
     model.eval()  # Chuyển mô hình sang chế độ suy luận (tắt Dropout/Stochastic Depth)
@@ -142,7 +156,7 @@ def evaluate_test_set(checkpoint_name: str = "best_convnext_month_2h.pth", apply
             )
 
     plt.tight_layout()
-    cm_path = output_dir / "confusion_matrix_month_2h.png"
+    cm_path = output_dir / output_cm_name
     plt.savefig(cm_path, dpi=150)
     plt.close(fig)
 
@@ -151,9 +165,17 @@ def evaluate_test_set(checkpoint_name: str = "best_convnext_month_2h.pth", apply
 
 
 if __name__ == '__main__':
-    # Kiểm tra xem có checkpoint mới đã train chưa, nếu có thì ưu tiên đánh giá
-    new_ckpt = Path("outputs/checkpoints/best_convnext_month_2h_transformed.pth")
-    if new_ckpt.exists():
-        evaluate_test_set(checkpoint_name=new_ckpt.name, apply_paper_transform=True)
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "in22k":
+        evaluate_test_set(
+            checkpoint_name="best_convnext_month_2h_in22k.pth",
+            apply_paper_transform=True,
+            is_in22k=True,
+            output_cm_name="confusion_matrix_month_2h_in22k.png"
+        )
     else:
-        evaluate_test_set(checkpoint_name="best_convnext_month_2h.pth", apply_paper_transform=False)
+        new_ckpt = Path("outputs/checkpoints/best_convnext_month_2h_transformed.pth")
+        if new_ckpt.exists():
+            evaluate_test_set(checkpoint_name=new_ckpt.name, apply_paper_transform=True)
+        else:
+            evaluate_test_set(checkpoint_name="best_convnext_month_2h.pth", apply_paper_transform=False)

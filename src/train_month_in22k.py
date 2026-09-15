@@ -198,7 +198,8 @@ def train_month_in22k(epochs: int = 15, pretrained: bool = True):
         print(
             f"Epoch [{epoch:02d}/{epochs:02d}] ({duration:.1f}s, lr={current_lr:.2e}) | "
             f"Train Loss: {epoch_train_loss:.4f} - Acc: {epoch_train_acc:5.2f}% | "
-            f"Val Loss: {epoch_val_loss:.4f} - Acc: {epoch_val_acc:5.2f}% | {saved_mark}"
+            f"Val Loss: {epoch_val_loss:.4f} - Acc: {epoch_val_acc:5.2f}% | {saved_mark}",
+            flush=True
         )
 
         history.append({

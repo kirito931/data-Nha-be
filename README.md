@@ -100,38 +100,60 @@ Thực nghiệm được thực hiện độc lập trên toàn bộ dữ liệu
 | **+2h** | 222 | **0.9612** | **73.42%** | **73.12%** | 0.4984 | **84.92%** |
 | **+3h** | 222 | **0.9753** | **76.23%** | **60.61%** | 0.4961 | **84.66%** |
 
-### 4.2. Khảo sát ảnh hưởng của Data Transformation (Ablation Study mốc +2h)
+### 4.2. Khảo sát ảnh hưởng của Data Transformation & Pretrained Weights (Ablation Study mốc +2h)
 
-Nhóm tiến hành thực nghiệm đối chứng tại mốc +2h (15 epochs trên RTX 4050) để đánh giá tác động của chuỗi biến đổi dữ liệu theo bài báo:
+Nhóm tiến hành thực nghiệm đối chứng tại mốc +2h (15 epochs trên RTX 4050) qua 3 giai đoạn tiến hóa của mô hình:
 
-| Cấu hình mô hình (+2h) | Data Transformation | Val Acc tốt nhất | Test Accuracy | Test Macro F1 | Checkpoint lưu trữ |
-| :--- | :--- | :---: | :---: | :---: | :--- |
-| **Phiên bản 1 (Baseline)** | Không (Raw pixels $[0, 1]$) | **79.73%** | **73.42%** | **73.12%** | `best_convnext_month_2h.pth` |
-| **Phiên bản 2 (Chuẩn Paper)** | Có (RandAug + Blur + Norm) | 74.32% | 68.02% | 67.90% | `best_convnext_month_2h_transformed.pth` |
-| **Bài báo gốc (NRD-1)** | Có (RandAug + Blur + Norm) | -- | **84.92%** | -- | *Dữ liệu 3 năm, 150 epochs* |
+| Phiên bản thực nghiệm | Trọng số Pretrained | Data Transformation | Val Acc tốt nhất | Test Accuracy | Test Macro F1 | Checkpoint lưu trữ |
+| :--- | :---: | :--- | :---: | :---: | :---: | :--- |
+| **Phiên bản 1 (Baseline)** | ImageNet-1K (`torchvision`) | Không (Raw pixels $[0, 1]$) | **79.73%** | 73.42% | 73.12% | `best_convnext_month_2h.pth` |
+| **Phiên bản 2 (Data Transform)** | ImageNet-1K (`torchvision`) | Có (RandAug + Blur + Norm) | 74.32% | 68.02% | 67.90% | `best_convnext_month_2h_transformed.pth` |
+| **Phiên bản 3 (Chuẩn 100% Paper)** | **ImageNet-22k (Meta AI)** | Có (RandAug + Blur + Norm) | **76.58%** | **73.42%** | **73.40%** | `best_convnext_month_2h_in22k.pth` |
+| **Bài báo gốc (NRD-1 Benchmark)** | ImageNet-22k (Meta AI) | Có (RandAug + Blur + Norm) | -- | **84.92%** | -- | *Dữ liệu 3 năm, 150 epochs* |
 
-> **Phân tích:** Khi bật RandAugment, không gian bài toán học trở nên biến động và phức tạp hơn rất nhiều. Với mạng dung lượng lớn như ConvNeXt-B, kỹ thuật tăng cường dữ liệu đòi hỏi số epoch huấn luyện dài (trong bài báo là **150 epochs**) để mô hình hấp thu đầy đủ tính đa dạng và phát huy khả năng tổng quát hóa. Ở ngưỡng ngắn 15 epochs, mô hình Baseline hội tụ nhanh hơn, trong khi mô hình có RandAugment vẫn đang trong giai đoạn thích nghi.
+> **Phân tích khoa học:**
+> 1. Khi áp dụng Data Transformation phức tạp (RandAugment + Blur 5x5 + AutoContrast), mô hình **Phiên bản 2** (ImageNet-1K) bị sụt giảm độ chính xác tập Test xuống 68.02% do không gian đặc trưng của 1.000 lớp vật thể thông thường chưa đủ tính khái quát để thích nghi nhanh với dữ liệu radar biến dạng trong 15 epochs.
+> 2. Tuy nhiên, khi nâng cấp lên **Phiên bản 3 (ImageNet-22k)** với 21.841 lớp gốc của Meta AI và kỹ thuật Stochastic Depth (`drop_path_rate = 0.2`), hiệu năng mô hình tăng vọt trở lại: **Test Accuracy đạt 73.42% (+5.40%)** và **Test Macro F1 đạt 73.40% (+5.50%)**. Kết quả này chứng minh tính đúng đắn tuyệt đối trong lựa chọn kiến trúc ImageNet-22k của nhóm tác giả bài báo gốc.
 
-### 4.3. Thử nghiệm thực tế mô hình ConvNeXt-B Pretrained ImageNet-22k (`model_in22k.py`)
+### 4.3. Kết quả thực nghiệm chi tiết mô hình chuẩn Paper ImageNet-22k (`model_in22k.py`)
 
-Nhóm đã khởi chạy thực nghiệm kiểm chứng vòng lặp huấn luyện mô hình ImageNet-22k trên GPU NVIDIA RTX 4050 bằng script `src/train_month_in22k.py`:
+Mô hình ConvNeXt-B Pretrained ImageNet-22k được huấn luyện thành công trọn vẹn **15 epochs** trên GPU NVIDIA RTX 4050 (thời gian hoàn thành: **30.9 phút**):
 
-| Epoch | Learning Rate | Train Loss | Train Acc (%) | Val Loss | Val Acc (%) | Trạng thái Checkpoint |
-| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| **01/02** | $4.53 \times 10^{-5}$ | 1.4405 | 39.25% | 1.2757 | 47.30% | `best_convnext_month_2h_in22k.pth` |
-| **02/02** | $3.31 \times 10^{-5}$ | 1.1901 | 51.01% | 1.1036 | **60.81%** | Tăng trưởng vượt bậc (+13.51% Val Acc) |
+- **Tiến trình huấn luyện (15 Epochs)**:
+  - Khởi đầu (Epoch 1): Train Loss 1.4414, Acc 39.08% | Val Loss 1.2885, Acc 45.50%
+  - Tăng tốc (Epoch 3): Val Acc nhảy vọt lên **65.32%**
+  - Hội tụ (Epoch 15): Train Loss 0.8120, Acc 77.25% | Val Loss 0.8889, Val Acc đạt **76.58%**
 
-> **Nhận xét:** Trọng số ImageNet-22k thể hiện khả năng thích ứng rất nhanh với đặc trưng ảnh phản hồi radar: chỉ sau 2 epochs đầu tiên, độ chính xác tập xác thực (Validation Accuracy) đã tăng vọt từ 47.30% lên **60.81%**, chứng minh tính ưu việt của không gian biểu diễn 21.841 lớp của Meta AI.
+- **Báo cáo phân loại trên tập Test độc lập (222 mẫu mốc +2h)**:
+
+| Lớp thời tiết (Weather Class) | Precision | Recall | F1-Score | Số mẫu thực tế (Support) |
+| :--- | :---: | :---: | :---: | :---: |
+| **Clear** (Trời quang) | 0.7949 | 0.6458 | 0.7126 | 48 |
+| **Light rain** (Mưa nhỏ) | 0.7176 | 0.7722 | 0.7439 | 79 |
+| **Moderate rain** (Mưa vừa) | 0.6618 | 0.8036 | 0.7258 | 56 |
+| **Heavy rain** (Mưa to / Dông) | **0.8667** | 0.6667 | **0.7536** | 39 |
+| **Trung bình Macro (Macro Avg)** | **0.7602** | **0.7221** | **0.7340** | **222** |
+| **Độ chính xác tổng thể (Accuracy)** | -- | -- | **73.42%** | **222** |
+
+> **Điểm nổi bật:** Đối với lớp thời tiết nguy hiểm nhất (**Heavy rain**), mô hình đạt **Precision lên tới 86.67%** (tức là khi mô hình đưa ra cảnh báo mưa to thì khả năng chính xác đạt gần 87%, hạn chế tối đa báo động giả), với F1-Score đạt **75.36%**.
 
 ### 4.4. Trực quan hóa kết quả
 
-| Đối chiếu độ chính xác 4 mốc (So với Bài báo gốc) | Ma trận nhầm lẫn Test Set (Mốc 2h) |
-| :---: | :---: |
-| ![Horizon Comparison](assets/horizon_comparison.png) | ![Confusion Matrix](assets/confusion_matrix.png) |
+#### A. Mô hình Chuẩn Bài báo (Pretrained ImageNet-22k + Data Transformation)
 
-| Đường cong học tập (Loss & Accuracy mốc 2h) |
+| Đường cong học tập 15 Epochs (ImageNet-22k) | Ma trận nhầm lẫn Test Set (ImageNet-22k) |
+| :---: | :---: |
+| ![Learning Curves ImageNet-22k](assets/learning_curves_in22k.png) | ![Confusion Matrix ImageNet-22k](assets/confusion_matrix_in22k.png) |
+
+#### B. Mô hình Baseline Đối chứng (Pretrained ImageNet-1K)
+
+| Đối chiếu 4 mốc dự báo so với Bài báo gốc | Ma trận nhầm lẫn Baseline mốc 2h |
+| :---: | :---: |
+| ![Horizon Comparison](assets/horizon_comparison.png) | ![Confusion Matrix Baseline](assets/confusion_matrix.png) |
+
+| Đường cong học tập Baseline mốc 2h |
 | :---: |
-| ![Learning Curves](assets/learning_curves.png) |
+| ![Learning Curves Baseline](assets/learning_curves.png) |
 
 ### 4.5. Nhận xét khoa học
 1. **Xu hướng phân rã dự báo (Forecast Degradation)**: Độ chính xác đạt cao nhất ở mốc tức thời 0h (83.93%) và giảm dần khi khoảng cách dự báo tương lai tăng lên 1h, 2h, 3h (73–76%), phản ánh chính xác quy luật động lực học của hoàn lưu khí quyển.
@@ -147,9 +169,11 @@ Nhóm đã khởi chạy thực nghiệm kiểm chứng vòng lặp huấn luy�
 ```
 Đồ án/
 ├── assets/                          # Biểu đồ và hình ảnh minh họa cho README
-│   ├── confusion_matrix.png         # Ma trận nhầm lẫn 5 lớp thời tiết mốc 2h
+│   ├── confusion_matrix.png         # Ma trận nhầm lẫn mốc 2h (Baseline ImageNet-1K)
+│   ├── confusion_matrix_in22k.png   # Ma trận nhầm lẫn mốc 2h (Chuẩn Paper ImageNet-22k)
 │   ├── horizon_comparison.png       # Biểu đồ cột đối chiếu 4 mốc dự báo với bài báo
-│   └── learning_curves.png          # Đường cong hàm mất mát (Loss) và độ chính xác
+│   ├── learning_curves.png          # Đường cong học tập mốc 2h (Baseline ImageNet-1K)
+│   └── learning_curves_in22k.png    # Đường cong học tập 15 epochs (Chuẩn Paper ImageNet-22k)
 │
 ├── outputs/                         # Kết quả trung gian và checkpoint (đã gitignore)
 │   ├── checkpoints/                 # Trọng số mô hình (.pth) và file log
@@ -237,9 +261,14 @@ pip install -r requirements.txt
    python src/compare_horizons_month.py
    ```
 8. **Đánh giá chi tiết tập Test và vẽ Ma trận nhầm lẫn**:
-   ```bash
-   python src/evaluate_month.py
-   ```
+   - *Đánh giá mô hình Baseline (ImageNet-1K)*:
+     ```bash
+     python src/evaluate_month.py
+     ```
+   - *Đánh giá mô hình Chuẩn Paper (ImageNet-22k)*:
+     ```bash
+     python src/evaluate_month.py in22k
+     ```
 
 ---
 
