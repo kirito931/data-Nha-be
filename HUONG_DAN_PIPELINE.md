@@ -68,9 +68,11 @@ Dưới đây là thứ tự mở và chạy các file code trong dự án. **Tu
  └─────────────────┬─────────────────────────┘
                    │
                    ▼
- [Bước 9] train_month.py                    Huấn luyện mô hình ConvNeXt-B trên GPU (mốc 2h)
-                                            Output: outputs/checkpoints/best_convnext_month_2h.pth
-                                                    outputs/checkpoints/learning_curves_month_2h.png
+ [Bước 9] train_month.py /                 Huấn luyện mô hình ConvNeXt-B trên GPU (mốc 2h):
+          train_month_in22k.py             - train_month.py: Pretrained 1K
+                                           - train_month_in22k.py: Chuẩn bài báo 22k (timm)
+                                           Output: outputs/checkpoints/best_convnext_month_2h*.pth
+                                                   outputs/checkpoints/train_history_month_2h*.csv
                                             │
                    ┌────────────────────────┴────────────────────────┐
                    ▼                                                 ▼

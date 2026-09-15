@@ -18,6 +18,7 @@ pipeline.txt
 Báo cáo tiến độ.pdf
 main.pdf
 *.pdf
+*.tex
 
 # Thư mục đầu ra, ảnh PPI trích xuất và trọng số mô hình
 outputs/

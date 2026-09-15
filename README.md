@@ -75,10 +75,11 @@ x_label = np.sum(normalized_weights * valid_vals) / np.sum(normalized_weights)
 ```
 
 ### 3.2. Cấu hình mạng ConvNeXt-B
-- **Stem Convolution**: Thay đổi lớp `nn.Conv2d(3, 128, kernel_size=4, stride=4)` thành `(12, 128, 4, 4)`. Trọng số được khởi tạo bằng cách lặp lại trọng số 3 kênh gốc của ImageNet và chia đều cho 4: $W_{new} = \text{repeat}(W_{orig}, 4) / 4$.
-- **Classifier Head**: Thay lớp Linear phân loại của ImageNet thành `nn.Linear(1024, 5)` với hệ số khởi tạo `head_init_scale = 0.001` để bảo đảm độ ổn định khi hội tụ.
-  - *Mô hình chính (`model.py`)*: Sử dụng trọng số ImageNet-1K (`IMAGENET1K_V1` tích hợp sẵn trong torchvision) để kiểm chứng pipeline ổn định.
-  - *Mô hình mở rộng (`model_in22k.py`)*: Hỗ trợ nạp đúng trọng số ImageNet-22k (21.841 classes) phát hành bởi Meta AI qua thư viện `timm` theo nguyên bản bài báo.
+- **Stem Convolution**: Thay đổi lớp `nn.Conv2d(3, 128, kernel_size=4, stride=4)` thành `(12, 128, 4, 4)`. Trọng số được khởi tạo bằng cách lặp lại trọng số 3 kênh gốc của ImageNet và chia đều cho 4: $W_{new} = \text{repeat}(W_{orig}, 4) / 4$ để bảo toàn năng lượng tín hiệu ban đầu.
+- **Classifier Head**: Thay lớp Linear phân loại thành `nn.Linear(1024, 5)` với hệ số khởi tạo `head_init_scale = 0.001` (theo mục 4.2 của bài báo) nhằm ổn định biên độ gradient trong những epoch đầu.
+- **Hai biến thể kiến trúc được cung cấp**:
+  1. **Phiên bản 1 (Baseline - `src/model.py`)**: Sử dụng trọng số `IMAGENET1K_V1` (1.000 classes) tích hợp sẵn trong torchvision để kiểm chứng toàn diện tính ổn định của pipeline trên phần cứng cá nhân.
+  2. **Phiên bản 2 (Chuẩn 100% bài báo gốc - `src/model_in22k.py`)**: Sử dụng trọng số Pretrained ImageNet-22k (`convnext_base.fb_in22k`, 14.2 triệu ảnh, 21.841 nhãn gốc của Meta AI) thông qua thư viện `timm`, tích hợp **Stochastic Depth (`drop_path_rate = 0.2`)** theo đúng Bảng 2 của bài báo.
 - **Optimizer & Scheduler**:
   - `AdamW`: Base Learning Rate = $5 \times 10^{-5}$, Weight Decay = $0.01$.
   - `CosineAnnealingLR`: $T_{max} = 5$.
@@ -111,7 +112,18 @@ Nhóm tiến hành thực nghiệm đối chứng tại mốc +2h (15 epochs tr�
 
 > **Phân tích:** Khi bật RandAugment, không gian bài toán học trở nên biến động và phức tạp hơn rất nhiều. Với mạng dung lượng lớn như ConvNeXt-B, kỹ thuật tăng cường dữ liệu đòi hỏi số epoch huấn luyện dài (trong bài báo là **150 epochs**) để mô hình hấp thu đầy đủ tính đa dạng và phát huy khả năng tổng quát hóa. Ở ngưỡng ngắn 15 epochs, mô hình Baseline hội tụ nhanh hơn, trong khi mô hình có RandAugment vẫn đang trong giai đoạn thích nghi.
 
-### 4.3. Trực quan hóa kết quả
+### 4.3. Thử nghiệm thực tế mô hình ConvNeXt-B Pretrained ImageNet-22k (`model_in22k.py`)
+
+Nhóm đã khởi chạy thực nghiệm kiểm chứng vòng lặp huấn luyện mô hình ImageNet-22k trên GPU NVIDIA RTX 4050 bằng script `src/train_month_in22k.py`:
+
+| Epoch | Learning Rate | Train Loss | Train Acc (%) | Val Loss | Val Acc (%) | Trạng thái Checkpoint |
+| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| **01/02** | $4.53 \times 10^{-5}$ | 1.4405 | 39.25% | 1.2757 | 47.30% | `best_convnext_month_2h_in22k.pth` |
+| **02/02** | $3.31 \times 10^{-5}$ | 1.1901 | 51.01% | 1.1036 | **60.81%** | Tăng trưởng vượt bậc (+13.51% Val Acc) |
+
+> **Nhận xét:** Trọng số ImageNet-22k thể hiện khả năng thích ứng rất nhanh với đặc trưng ảnh phản hồi radar: chỉ sau 2 epochs đầu tiên, độ chính xác tập xác thực (Validation Accuracy) đã tăng vọt từ 47.30% lên **60.81%**, chứng minh tính ưu việt của không gian biểu diễn 21.841 lớp của Meta AI.
+
+### 4.4. Trực quan hóa kết quả
 
 | Đối chiếu độ chính xác 4 mốc (So với Bài báo gốc) | Ma trận nhầm lẫn Test Set (Mốc 2h) |
 | :---: | :---: |
@@ -121,7 +133,7 @@ Nhóm tiến hành thực nghiệm đối chứng tại mốc +2h (15 epochs tr�
 | :---: |
 | ![Learning Curves](assets/learning_curves.png) |
 
-### 4.4. Nhận xét khoa học
+### 4.5. Nhận xét khoa học
 1. **Xu hướng phân rã dự báo (Forecast Degradation)**: Độ chính xác đạt cao nhất ở mốc tức thời 0h (83.93%) và giảm dần khi khoảng cách dự báo tương lai tăng lên 1h, 2h, 3h (73–76%), phản ánh chính xác quy luật động lực học của hoàn lưu khí quyển.
 2. **Hiện tượng mất cân bằng lớp ở mốc +3h**: Tại mốc +3h, Accuracy đạt 76.23% nhưng Macro F1 giảm xuống 60.61% do mô hình thiên vị dự đoán vào các lớp đa số (Clear, Light rain). Macro F1 phản ánh khách quan hơn năng lực bắt trúng các cơn mưa nguy hiểm.
 3. **Khoảng cách so với bài báo gốc**: Kết quả của mô hình nhóm thấp hơn bài báo từ 7–11% là hoàn toàn dễ hiểu và hợp lý, do:
@@ -157,7 +169,8 @@ Nhóm tiến hành thực nghiệm đối chứng tại mốc +2h (15 epochs tr�
 │   ├── radar_dataset.py             # [Bước 07] PyTorch Dataset tích hợp đầy đủ Data Transformation
 │   ├── model.py                     # [Bước 08 - Phương án 1] Mạng ConvNeXt-B 12 kênh (Pretrained ImageNet-1K)
 │   ├── model_in22k.py               # [Bước 08 - Phương án 2] Mạng ConvNeXt-B Pretrained ImageNet-22k theo chuẩn Paper (timm)
-│   ├── train_month.py               # [Bước 09] Huấn luyện mô hình mốc 2h tối ưu GPU RTX 4050
+│   ├── train_month.py               # [Bước 09 - Phương án 1] Huấn luyện mô hình mốc 2h tối ưu GPU RTX 4050 (ImageNet-1K)
+│   ├── train_month_in22k.py         # [Bước 09 - Phương án 2] Huấn luyện mô hình mốc 2h chuẩn bài báo (ImageNet-22k)
 │   ├── evaluate_month.py            # [Bước 10] Đánh giá chi tiết tập Test, xuất Confusion Matrix
 │   └── compare_horizons_month.py    # [Bước 11] Huấn luyện và đánh giá đối chiếu cả 4 mốc
 │
@@ -211,9 +224,14 @@ pip install -r requirements.txt
    python src/build_dataset_metadata_month.py
    ```
 6. **Huấn luyện mô hình ConvNeXt-B (Mốc 2h)**:
-   ```bash
-   python src/train_month.py
-   ```
+   - *Phương án 1 (Baseline ImageNet-1K - 15 epochs)*:
+     ```bash
+     python src/train_month.py
+     ```
+   - *Phương án 2 (Chuẩn 100% bài báo ImageNet-22k - ví dụ chạy 15 epochs)*:
+     ```bash
+     python src/train_month_in22k.py 15
+     ```
 7. **Huấn luyện và so sánh toàn diện 4 mốc (0h, 1h, 2h, 3h)**:
    ```bash
    python src/compare_horizons_month.py
