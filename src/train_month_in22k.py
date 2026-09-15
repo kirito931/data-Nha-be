@@ -130,45 +130,54 @@ def train_month_in22k(epochs: int = 15, pretrained: bool = True):
     for epoch in range(1, epochs + 1):
         epoch_start = time.time()
 
-        # --- A. GIAI ĐOẠN HUẤN LUYỆN (TRAIN) ---
+        # --- A. GIAI ĐOẠN HUẤN LUYỆN (TRAINING PHASE) ---
+        # Bật chế độ huấn luyện: các lớp Dropout và Stochastic Depth sẽ hoạt động ngẫu nhiên để chống học vẹt
         model.train()
         train_loss = 0.0
         train_correct = 0
         train_total = 0
+        # Xóa sạch gradient tích lũy từ vòng lặp trước (giải phóng bộ nhớ đệm)
         optimizer.zero_grad(set_to_none=True)
 
         for step, (inputs, targets) in enumerate(train_loader, start=1):
+            # Chuyển dữ liệu và nhãn lên GPU nhanh chóng (non_blocking giúp nạp dữ liệu song song với tính toán)
             inputs = inputs.to(device, non_blocking=True)
             targets = targets.to(device, non_blocking=True)
 
+            # Tự động chuyển đổi kiểu dữ liệu sang FP16 (nửa độ chính xác) để giảm 50% dung lượng VRAM
             with autocast('cuda'):
-                outputs = model(inputs)
-                loss = criterion(outputs, targets)
-                scaled_loss = loss / accum_steps
+                outputs = model(inputs)                 # Lan truyền tiến (Forward pass): Ra vector 5 xác suất lớp
+                loss = criterion(outputs, targets)       # Tính độ lệch giữa dự đoán và nhãn thực tế
+                scaled_loss = loss / accum_steps         # Chia nhỏ loss để tích lũy đạo hàm mô phỏng batch lớn
 
+            # Lan truyền ngược (Backward pass): Tính đạo hàm thông qua scaler để tránh tràn số dưới (Underflow FP16)
             scaler.scale(scaled_loss).backward()
 
+            # Khi gom đủ 3 bước (tương đương gom 12 x 3 = 36 ảnh), ta mới cập nhật trọng số mô hình một lần
             if step % accum_steps == 0 or step == len(train_loader):
-                scaler.step(optimizer)
-                scaler.update()
-                optimizer.zero_grad(set_to_none=True)
+                scaler.step(optimizer)                   # Cập nhật trọng số mạng bằng AdamW
+                scaler.update()                          # Điều chỉnh hệ số scale cho lượt sau
+                optimizer.zero_grad(set_to_none=True)    # Đặt lại gradient về rỗng
 
             train_loss += loss.item() * inputs.size(0)
-            preds = outputs.argmax(dim=1)
+            preds = outputs.argmax(dim=1)                # Lấy nhãn có điểm số cao nhất trong 5 lớp
             train_correct += (preds == targets).sum().item()
             train_total += targets.size(0)
 
+        # Cập nhật tốc độ học (Learning Rate) sau mỗi epoch theo đường cong hình sin Cosine Annealing
         scheduler.step()
 
         epoch_train_loss = train_loss / train_total
         epoch_train_acc = train_correct / train_total * 100
 
-        # --- B. GIAI ĐOẠN ĐÁNH GIÁ (VALIDATION) ---
+        # --- B. GIAI ĐOẠN ĐÁNH GIÁ (VALIDATION PHASE) ---
+        # Chuyển sang chế độ đánh giá: Tắt Stochastic Depth/Dropout để kết quả đo đạc mang tính xác định tuyệt đối
         model.eval()
         val_loss = 0.0
         val_correct = 0
         val_total = 0
 
+        # Tắt hoàn toàn việc lưu vết đạo hàm (giúp tăng tốc và không tốn VRAM lưu computation graph)
         with torch.no_grad():
             for inputs, targets in val_loader:
                 inputs = inputs.to(device, non_blocking=True)
