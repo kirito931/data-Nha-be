@@ -20,6 +20,7 @@ main.pdf
 *.pdf
 *.tex
 GIAO_TRINH_HOC_DO_AN_TU_CON_SO_0.md
+HUONG_DAN_DOC_BAI_BAO_KHOA_HOC.md
 
 # Thư mục đầu ra, ảnh PPI trích xuất và trọng số mô hình
 outputs/
