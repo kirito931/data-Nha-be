@@ -198,7 +198,6 @@ Mô hình ConvNeXt-B Pretrained ImageNet-22k được huấn luyện thành côn
 │   ├── evaluate_month.py            # [Bước 10] Đánh giá chi tiết tập Test, xuất Confusion Matrix
 │   └── compare_horizons_month.py    # [Bước 11] Huấn luyện và đánh giá đối chiếu cả 4 mốc
 │
-├── GIAO_TRINH_HOC_DO_AN_TU_CON_SO_0.md # 🎓 Giáo trình chi tiết từ A-Z cho người mới bắt đầu (Bản chất, công thức & 10 câu hỏi vấn đáp)
 ├── HUONG_DAN_PIPELINE.md            # 🧭 Cẩm nang toàn diện: Thứ tự mở và xử lý file từ 1 -> 11
 ├── requirements.txt                 # Danh mục thư viện phụ thuộc
 ├── .gitignore                       # Loại bỏ dữ liệu RAW lớn, checkpoints và outputs
