@@ -173,6 +173,20 @@ if __name__ == '__main__':
             is_in22k=True,
             output_cm_name="confusion_matrix_month_2h_in22k.png"
         )
+    elif len(sys.argv) > 1 and sys.argv[1] == "focal":
+        evaluate_test_set(
+            checkpoint_name="best_convnext_month_2h_in22k_focal.pth",
+            apply_paper_transform=True,
+            is_in22k=True,
+            output_cm_name="confusion_matrix_month_2h_in22k_focal.png"
+        )
+    elif len(sys.argv) > 1 and sys.argv[1] == "weighted_ce":
+        evaluate_test_set(
+            checkpoint_name="best_convnext_month_2h_in22k_weighted_ce.pth",
+            apply_paper_transform=True,
+            is_in22k=True,
+            output_cm_name="confusion_matrix_month_2h_in22k_weighted_ce.png"
+        )
     else:
         new_ckpt = Path("outputs/checkpoints/best_convnext_month_2h_transformed.pth")
         if new_ckpt.exists():
